@@ -12760,10 +12760,11 @@ function lsLoad() {
     if (d.occupancies && d.occupancies.length)   state_01.occupancies  = d.occupancies;
     // M02 : charges, transactions, budget et réserve NON restaurés depuis localStorage
     // Les données financières repartent toujours de seedData_02 (données réelles)
-    // if (d.charges)     state_02.charges      = d.charges;      // désactivé
-    // if (d.transactions) state_02.transactions = d.transactions; // désactivé
-    // if (d.budget)       state_02.budget       = d.budget;       // désactivé
-    // if (d.reserveFund)  state_02.reserveFund  = d.reserveFund;  // désactivé
+    if (d.charges)      state_02.charges      = d.charges;      // ✓ restauré
+    if (d.transactions) state_02.transactions = d.transactions; // ✓ restauré
+    if (d.reserveFund)  state_02.reserveFund  = d.reserveFund; // ✓ restauré
+    // budget NON restauré — postes réels définis dans seedData_02
+    // if (d.budget)    state_02.budget       = d.budget;
     // S_03.tickets non restauré — données 2026
     // S_03.providers non restauré — données 2026
     // S_04.assemblies non restauré — 2026
