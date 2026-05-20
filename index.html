@@ -11323,8 +11323,22 @@ function showBackupModal() {
 // ══════════════════════════════════════════════════════════════
 // SUPABASE CLOUD SYNC
 // ══════════════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://xkzwnbpqkjejpqmthmwd.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrendubmJwcWtqZWpwcW10aG13ZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzE0MDAwMDAwLCJleHAiOjIwMjk2NzYwMDB9.placeholder';
+// Charger la config Supabase depuis localStorage au démarrage
+let SUPABASE_URL = '';
+let SUPABASE_KEY = '';
+(function() {
+  try {
+    const cfg = localStorage.getItem('sb_config');
+    if (cfg) {
+      const parsed = JSON.parse(cfg);
+      if (parsed.url && parsed.key) {
+        SUPABASE_URL = parsed.url;
+        SUPABASE_KEY = parsed.key;
+        console.log('✓ Config Supabase chargée depuis localStorage');
+      }
+    }
+  } catch(e) { console.warn('Supabase config load:', e); }
+})();
 const SB_PROJECT = 'sale_square_1';
 
 function _sbHeaders() {
@@ -11377,7 +11391,7 @@ async function checkSupabaseStatus() {
   const el = document.getElementById('supabase-status');
   if (!el) return;
   // Check if Supabase is configured
-  if (SUPABASE_KEY.includes('placeholder')) {
+  if (!SUPABASE_KEY || !SUPABASE_URL) {
     el.innerHTML = '⚠ Non configuré — <a href="#" onclick="showSupabaseConfig();return false" style="color:var(--gold)">Configurer Supabase</a>';
     return;
   }
@@ -11392,7 +11406,11 @@ async function checkSupabaseStatus() {
       }
       el.style.color = 'var(--success)';
     } else {
-      el.innerHTML = '⚠ Erreur connexion (' + res.status + ')';
+      const errText = await res.text().catch(()=>'');
+      const msg = res.status === 404 ? 'Table "sauvegarde" introuvable — exécuter le SQL de création' 
+                : res.status === 401 ? 'Clé API invalide'
+                : 'Erreur ' + res.status;
+      el.innerHTML = '⚠ ' + msg;
       el.style.color = 'var(--danger)';
     }
   } catch(e) {
@@ -11402,7 +11420,7 @@ async function checkSupabaseStatus() {
 }
 
 async function supabasePush() {
-  if (SUPABASE_KEY.includes('placeholder')) { showSupabaseConfig(); return; }
+  if (!SUPABASE_KEY || !SUPABASE_URL) { showSupabaseConfig(); return; }
   const btn = event?.target;
   if (btn) { btn.textContent = '⏳ Envoi...'; btn.disabled = true; }
   try {
@@ -11428,7 +11446,7 @@ async function supabasePush() {
 }
 
 async function supabasePull() {
-  if (SUPABASE_KEY.includes('placeholder')) { showSupabaseConfig(); return; }
+  if (!SUPABASE_KEY || !SUPABASE_URL) { showSupabaseConfig(); return; }
   const btn = event?.target;
   if (btn) { btn.textContent = '⏳ Chargement...'; btn.disabled = true; }
   try {
@@ -11471,7 +11489,7 @@ function showSupabaseConfig() {
       </div>
       <div style="margin-bottom:12px">
         <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--gray);margin-bottom:5px">URL Supabase</label>
-        <input id="sb_url" style="width:100%;padding:8px 10px;border:1px solid var(--border)" placeholder="https://xxx.supabase.co" value="${SUPABASE_KEY.includes('placeholder') ? '' : SUPABASE_URL}">
+        <input id="sb_url" style="width:100%;padding:8px 10px;border:1px solid var(--border)" placeholder="https://xxx.supabase.co" value="${SUPABASE_URL || ''}">
       </div>
       <div style="margin-bottom:20px">
         <label style="display:block;font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--gray);margin-bottom:5px">Clé Anon (publique)</label>
@@ -11491,31 +11509,25 @@ function saveSupabaseConfig() {
   if (!url || !key) { alert('URL et clé obligatoires'); return; }
   // Store in localStorage for persistence
   localStorage.setItem('sb_config', JSON.stringify({ url, key }));
-  // Reload page to apply
-  alert('Configuration sauvegardée. La page va se recharger.');
-  location.reload();
+  // Appliquer directement sans recharger la page
+  SUPABASE_URL = url;
+  SUPABASE_KEY = key;
+  document.querySelectorAll('.modal-backdrop').forEach(e => e.remove());
+  // Tester la connexion
+  checkSupabaseStatus();
+  // Afficher confirmation
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:48px;right:20px;background:white;border-left:4px solid var(--success);padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:300;font-size:13px';
+  t.innerHTML = '✓ <strong>Supabase configuré</strong> — test de connexion en cours...';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 4000);
+  showBackupModal();
 }
 
-// Load Supabase config from localStorage on startup
-(function() {
-  try {
-    const cfg = localStorage.getItem('sb_config');
-    if (cfg) {
-      const { url, key } = JSON.parse(cfg);
-      if (url && key) {
-        // Dynamic override - only works if we expose the variables
-        window._SUPABASE_URL = url;
-        window._SUPABASE_KEY = key;
-      }
-    }
-  } catch(e) {}
-})();
-
-// Override _sbHeaders to use dynamic config if available
-const _sbHeadersOrig = _sbHeaders;
+// Config Supabase chargée au début du script
 // Auto-sync to Supabase every 5 minutes if configured
 setInterval(async function() {
-  if (!SUPABASE_KEY.includes('placeholder') || window._SUPABASE_KEY) {
+  if (SUPABASE_KEY && SUPABASE_URL) {
     try { await supabasePush(); } catch(e) {}
   }
 }, 300000); // 5 minutes
